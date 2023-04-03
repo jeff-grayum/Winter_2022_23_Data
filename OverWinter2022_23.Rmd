@@ -1,0 +1,171 @@
+---
+title: "OverWinter2022_23"
+author: "Jeff Grayum"
+date: "2023-04-03"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Loading libraries.        
+```{r}
+library(tidyverse)
+library(readxl)
+library(ggthemes)
+library(scales)
+library(lubridate)
+library(janitor)
+library(forcats)
+```
+
+Looking at survival.
+```{r}
+km <- read_excel("/Users/jeffgrayum/Downloads/Fall2022_Ichauway_KM_Oct22_Sep.302.xlsx") %>%
+  clean_names()
+
+km <- km %>%
+  rename(start_date = dates,
+         end_date = x3) 
+
+
+km <- km %>%
+  mutate(
+    start_date = start_date + years(1),
+    end_date = end_date + years(1)
+  )
+
+
+
+km_clean <- km %>%
+  filter(start_date >= "2022-11-7") %>%
+  filter(end_date <= "2023-04-09")
+
+km_clean %>%
+  ggplot(aes(start_date, annual_survival_rate)) +
+  geom_line(linewidth = 1.5) +
+  labs(x = "Month",
+       y = "Survival",
+       title = "Winter Survival: 2022-23",
+       caption = "Ichauway Quail Project") +
+  theme_solarized_2() +
+  scale_y_continuous(labels = percent)
+
+```
+
+Looking at sources of mortality.
+```{r}
+#Importing data
+mort <- read_excel("/Users/jeffgrayum/Documents/BobwhiteData/Fate2023.xlsx") %>%
+  clean_names() 
+
+#Filtering for deaths
+mort <- mort %>%
+  filter(fate == "Dead")
+
+#Separating cause,date into two columns
+mort <- mort %>%
+  separate(cause, into = c("cause", "date"), sep = ", ")
+
+mort %>%
+  view()
+
+#Changing date column to proper format, arranging by date
+mort <- mort %>%
+   mutate(date = mdy(date)) %>%
+  view()
+
+mort <- mort %>%
+  arrange(date)
+
+#Filtering for winter 2022-23
+mort_overwinter2022_23 <- mort %>%
+  filter(date >= "2022-10-01") %>%
+  filter(date <= "2023-04-01")
+
+#Creating column called month name from the date column
+mort_overwinter2022_23_byMonth <- mort_overwinter2022_23%>%
+  mutate(month_name = month(date, label = TRUE)) %>%
+  arrange(date) %>%
+  view()
+
+#Finding causes of mortality for each month.
+mort_count_by_month <- mort_overwinter2022_23_byMonth %>%
+  group_by(month_name) %>%
+  count(cause, sort = TRUE) 
+
+# Calculating total mortalities per month
+mort_totals_by_month <- mort_count_by_month %>%
+  group_by(month_name) %>%
+  summarize(total_mortalities = sum(n), .groups = "drop")
+
+#Determining percent of mortalities for each month
+mort_percent_by_month <- mort_count_by_month %>%
+  left_join(mort_totals_by_month, by = "month_name") %>%
+  mutate(percent = n / total_mortalities)
+
+#Specifying month order for plot
+month_order <- c("Oct", "Nov", "Dec", "Jan", "Feb", "Mar")
+
+#Modify the data frame to have an ordered "month_name" column
+mort_count_by_month <- mort_count_by_month %>%
+  mutate(month_name = factor(month_name, levels = month_order, ordered = TRUE))
+
+#We want causes in this order
+cause_order_percent <- c("Mammal", "Small avian", "Large avian", "Unknown")
+
+
+#Creating the plot
+mort_percent_by_month %>%
+  filter(cause %in% cause_order_percent) %>%
+  ggplot(aes(fct_relevel(cause, cause_order_percent), percent, fill = cause)) +
+  geom_col() +
+  facet_wrap(~ month_name) +
+  theme_solarized_2() +
+  labs(x = "Cause",
+       y = "Percentage",
+       title = "Sources of Mortality: Winter 2022-23",
+       caption = "Ichauway Quail Project") +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels = percent)
+
+
+#Now we look at total mortality counts.
+mort_count_totals <- mort_overwinter2022_23 %>%
+  count(cause, sort = TRUE) %>%
+  head(4)
+
+cause_order_totals <- c("Mammal", "Small avian", "Large avian", "Unknown")
+
+mort_count_totals %>%
+  ggplot(aes(fct_relevel(cause, cause_order_totals), n, fill = cause)) +
+  geom_col() +
+  labs(x = "Cause",
+       y = "",
+       title = "Total overwinter mortalties: 2022-23",
+       caption = "Ichauway Quail Project") +
+  theme_solarized_2() +
+  theme(legend.position = "none")
+
+
+
+
+
+# Create the plot
+mort_percent_by_month %>%
+  filter(cause %in% cause_order_percent) %>%
+  ggplot(aes(fct_relevel(cause, cause_order), percent, fill = cause)) +
+  geom_col() +
+  facet_wrap(~ month_name) +
+  theme_solarized_2() +
+  labs(x = "Cause",
+       y = "Percentage",
+       title = "Sources of Mortality: Winter 2022-23",
+       caption = "Ichauway Quail Project") +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels = percent)
+```
+
